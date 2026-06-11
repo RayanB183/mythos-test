@@ -9,7 +9,7 @@ import {
 } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { clientAuth, clientDb, firebaseConfigured } from "@/lib/firebase/client";
+import { clientAuth, clientDb, firebaseConfigured, initAnalytics } from "@/lib/firebase/client";
 import type { Plan } from "@/lib/plans";
 
 export interface UserProfile {
@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    initAnalytics();
     return onAuthStateChanged(clientAuth(), (u) => {
       setUser(u);
       setLoading(false);

@@ -12,10 +12,10 @@ export default function PricingPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-16">
       <h1 className="animate-fade-in-up text-center text-4xl font-bold text-slate-900">
-        Pays for itself the first renewal you catch
+        Cheaper than any repair bill
       </h1>
       <p className="animate-fade-in-up animation-delay-100 mt-4 text-center text-slate-600">
-        One forgotten $12.99 subscription costs more than two months of Pro.
+        One clogged gutter costs more than three years of Pro.
       </p>
 
       <div className="mt-12 grid gap-8 sm:grid-cols-2">

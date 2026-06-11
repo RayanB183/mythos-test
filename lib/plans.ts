@@ -4,26 +4,26 @@ export const PLANS = {
   free: {
     name: "Free",
     price: "$0",
-    subscriptionLimit: 5,
+    taskLimit: 7,
     features: [
-      "Track up to 5 subscriptions",
-      "Monthly & yearly spend overview",
-      "Renewal countdowns",
+      "Track up to 7 maintenance tasks",
+      "Home health score",
+      "Due-date countdowns",
     ],
   },
   pro: {
     name: "Pro",
-    price: "$5",
-    subscriptionLimit: Infinity,
+    price: "$7",
+    taskLimit: Infinity,
     features: [
-      "Unlimited subscriptions",
-      "Spend projections & insights",
+      "Unlimited tasks — a full home needs 20+",
+      "Every one-click preset",
       "Priority support",
       "Cancel anytime",
     ],
   },
 } as const;
 
-export function subscriptionLimit(plan: Plan): number {
-  return PLANS[plan].subscriptionLimit;
+export function taskLimit(plan: Plan): number {
+  return PLANS[plan].taskLimit;
 }

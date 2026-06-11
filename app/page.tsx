@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { PLANS } from "@/lib/plans";
 
-const demoSubscriptions = [
-  { name: "Streamio Premium", cost: "$15.99", note: "Renews in 3 days", warn: true },
-  { name: "CloudDrive 2TB", cost: "$9.99", note: "Renews in 12 days", warn: false },
-  { name: "FitTrack Pro", cost: "$12.99", note: "Unused for 2 months", warn: true },
+const demoTasks = [
+  { name: "Replace HVAC filter", note: "Overdue by 12 days", warn: true },
+  { name: "Clean gutters", note: "Due in 9 days", warn: true },
+  { name: "Flush water heater", note: "Due in 3 months", warn: false },
 ];
 
 export default function HomePage() {
@@ -12,7 +12,6 @@ export default function HomePage() {
     <div className="overflow-hidden">
       {/* Hero */}
       <section className="relative mx-auto max-w-6xl px-4 pb-20 pt-24">
-        {/* Decorative gradient blobs */}
         <div
           aria-hidden
           className="pointer-events-none absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-gradient-to-br from-indigo-200 via-violet-200 to-transparent opacity-60 blur-3xl"
@@ -20,25 +19,25 @@ export default function HomePage() {
         <div className="relative grid items-center gap-12 lg:grid-cols-2">
           <div>
             <p className="animate-fade-in-up inline-block rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-              The average person wastes $1,600/year on forgotten subscriptions
+              Deferred maintenance costs homeowners thousands every year
             </p>
             <h1 className="animate-fade-in-up animation-delay-100 mt-6 text-5xl font-extrabold leading-tight tracking-tight text-slate-900">
-              Stop paying for subscriptions{" "}
+              Your home is your biggest asset.{" "}
               <span className="text-gradient animate-gradient-pan">
-                you forgot about
+                Keep it that way.
               </span>
             </h1>
             <p className="animate-fade-in-up animation-delay-200 mt-6 max-w-lg text-lg text-slate-600">
-              Renewly puts every recurring charge in one place — see exactly
-              what you spend each month, and get a countdown before anything
-              renews, so you cancel before you&apos;re billed.
+              Upkept turns home maintenance into a simple schedule — HVAC
+              filters, gutters, water heater, the things everyone forgets —
+              with due-date countdowns and a health score for your whole home.
             </p>
             <div className="animate-fade-in-up animation-delay-300 mt-10 flex items-center gap-4">
               <Link
                 href="/signup"
                 className="hover-lift animate-pulse-ring rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white hover:bg-indigo-700"
               >
-                Track my subscriptions — free
+                Protect my home — free
               </Link>
               <Link
                 href="/pricing"
@@ -54,43 +53,40 @@ export default function HomePage() {
             <div className="animate-scale-in animation-delay-300 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
               <div className="flex items-baseline justify-between">
                 <p className="text-sm font-medium text-slate-500">
-                  Monthly spend
+                  Home health
                 </p>
-                <p className="text-3xl font-extrabold text-slate-900">$38.97</p>
+                <p className="text-3xl font-extrabold text-slate-900">86%</p>
               </div>
               <div className="mt-5 space-y-3">
-                {demoSubscriptions.map((s, i) => (
+                {demoTasks.map((t, i) => (
                   <div
-                    key={s.name}
+                    key={t.name}
                     className={`animate-fade-in-up flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 ${
                       i === 0 ? "animation-delay-400" : "animation-delay-500"
                     }`}
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {s.name}
-                      </p>
-                      <p
-                        className={`text-xs ${
-                          s.warn ? "text-amber-600" : "text-slate-500"
-                        }`}
-                      >
-                        {s.note}
-                      </p>
-                    </div>
-                    <p className="text-sm font-bold text-slate-900">{s.cost}</p>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {t.name}
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        t.warn ? "font-medium text-amber-600" : "text-slate-500"
+                      }`}
+                    >
+                      {t.note}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
             <div className="animate-float absolute -right-6 -top-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-lg">
               <p className="text-xs font-semibold text-amber-800">
-                ⚠ FitTrack renews tomorrow — $12.99
+                ⚠ Dryer vent uncleaned — #1 cause of house fires
               </p>
             </div>
             <div className="animate-float-slow absolute -bottom-6 -left-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
               <p className="text-xs font-semibold text-emerald-800">
-                ✓ Cancelled 3 subscriptions · saved $312/yr
+                ✓ 14 tasks on schedule · ~$4,200 in repairs avoided
               </p>
             </div>
           </div>
@@ -101,9 +97,9 @@ export default function HomePage() {
       <section className="border-y border-slate-200 bg-white py-14">
         <div className="mx-auto grid max-w-5xl gap-8 px-4 text-center sm:grid-cols-3">
           {[
-            ["12", "subscriptions held by the average household"],
-            ["42%", "of people pay for a service they no longer use"],
-            ["$133", "wasted per month on forgotten renewals"],
+            ["$1 → $4", "every dollar of prevention saves four in repairs"],
+            ["65%", "of homeowners put off routine maintenance"],
+            ["20+", "recurring tasks the average home actually needs"],
           ].map(([stat, label], i) => (
             <div
               key={label}
@@ -121,21 +117,21 @@ export default function HomePage() {
       {/* Features */}
       <section className="mx-auto max-w-6xl px-4 py-20">
         <h2 className="animate-fade-in-up text-center text-3xl font-bold text-slate-900">
-          Everything in one dashboard
+          A maintenance schedule that builds itself
         </h2>
         <div className="mt-12 grid gap-6 sm:grid-cols-3">
           {[
             {
-              title: "See your true spend",
-              body: "Every recurring charge totalled into a real monthly and yearly number. Most people are shocked the first time.",
+              title: "One-click presets",
+              body: "HVAC filters, gutters, sump pump, dryer vent — add the tasks everyone forgets, each with the right schedule built in.",
             },
             {
-              title: "Never miss a renewal",
-              body: "Live countdowns flag anything renewing in the next 7 days, so you cancel before the charge — not after.",
+              title: "A health score for your home",
+              body: "One number tells you instantly whether you're on top of things or quietly racking up repair bills.",
             },
             {
               title: `Pro for ${PLANS.pro.price}/mo`,
-              body: "Unlimited subscriptions and spend insights. Renewly pays for itself the first time you catch one renewal.",
+              body: "Unlimited tasks for the whole house. One avoided service call pays for years of Pro.",
             },
           ].map((f, i) => (
             <div
@@ -154,7 +150,7 @@ export default function HomePage() {
             href="/signup"
             className="hover-lift inline-block rounded-lg bg-indigo-600 px-8 py-3 font-medium text-white hover:bg-indigo-700"
           >
-            Find out what you&apos;re really spending
+            Get your home health score
           </Link>
         </div>
       </section>

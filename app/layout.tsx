@@ -4,9 +4,9 @@ import Navbar from "@/components/Navbar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Renewly — Stop paying for subscriptions you forgot about",
+  title: "Upkept — Home maintenance on autopilot",
   description:
-    "Track every recurring charge in one place, see your true monthly spend, and get renewal countdowns before you're billed. Free to start.",
+    "Track every maintenance task your home needs — HVAC filters, gutters, water heater — with due-date countdowns and a home health score. Free to start.",
 };
 
 export default function RootLayout({

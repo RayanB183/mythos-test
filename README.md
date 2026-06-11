@@ -1,15 +1,24 @@
-# Upkept — home maintenance on autopilot (SaaS with Stripe + Firebase)
+# Paydar — payment radar for creator brand deals (SaaS with Stripe + Firebase)
 
-**The problem:** ~65% of homeowners defer routine maintenance, and every $1
-of skipped prevention turns into roughly $4 of repairs. Nobody remembers to
-flush the water heater or clean the dryer vent — until the bill arrives.
-Upkept turns it all into a simple recurring schedule with due-date
-countdowns and a single "home health" score.
+**The problem (researched, not guessed):**
 
-**The market angle:** high interest (every homeowner has this problem and
-knows it), low saturation (no dominant consumer brand), and existing
-competitors are underdeveloped — HomeZada is bloated and dated, Oply/Dwellin
-are thin, and UpKeep pivoted to enterprise CMMS.
+- **87% of creators** have been paid late, paid the wrong amount, or not
+  paid at all, and **40%** call chasing payments one of the hardest parts
+  of the job (Business Insider survey, via
+  [Lumanu](https://www.lumanu.com/blog/from-promises-to-non-payments-influencers-turning-to-legal-action)).
+- Net-90 payment terms are becoming the industry norm, and once an invoice
+  is submitted creators have **zero visibility** into payment status.
+- Brand deals are ~**70% of creator income** (Goldman Sachs), in an
+  influencer-marketing market worth **$32.5B in 2025** (+35% YoY).
+- Today creators manage this in spreadsheets — they literally **buy tracker
+  templates on Etsy**. Competing apps are thin or brand-new (STACX, Nythor,
+  Notion templates); marketplaces like Collabstr only track deals made
+  through them.
+
+**The product:** track every brand deal through a pipeline
+(pitched → negotiating → signed → delivered → invoiced → paid). The moment
+a deal is invoiced, Paydar starts the clock on its payment terms and flags
+the exact day a brand goes late — and by how much.
 
 Built with **Next.js (App Router)**, **Firebase** (Auth + Firestore), and
 **Stripe** (subscriptions).
@@ -19,23 +28,25 @@ Built with **Next.js (App Router)**, **Firebase** (Auth + Firestore), and
 - **Animated landing page** and **pricing page** with Free / Pro tiers
 - **Auth**: email + password and Google sign-in via Firebase Auth
 - **The product**:
-  - Recurring maintenance tasks (monthly / quarterly / 6-month / yearly)
-    with live due-date countdowns, overdue flags, and one-tap **✓ Done**
-    that automatically reschedules the next occurrence
-  - **One-click presets** for the tasks everyone forgets (HVAC filter,
-    gutters, sump pump, dryer vent…), each with the right cadence built in
-  - **Home health score** — % of tasks not overdue, animated count-up
+  - Deal pipeline with one-click stage advancement; marking a deal
+    *invoiced* stamps the invoice date automatically
+  - **Payment radar**: expected pay date = invoice date + payment terms
+    (net 15/30/45/60/90); overdue payments turn red with a days-late
+    counter and sort to the top
+  - Money summary with animated count-ups: pipeline value, awaiting
+    payment, and overdue total
+  - Content-deadline countdowns for deals that aren't delivered yet
 - **Monetization**:
-  - Free plan capped at 7 tasks; a full home needs 20+ → Pro ($7/mo) is
-    unlimited
-  - Stripe Checkout for subscribing, Customer Portal for managing/cancelling
-  - Stripe webhook keeps each user's plan in sync in Firestore (UI flips to
-    Pro in real time after payment)
-- **Animations**: entrance/stagger animations, hover lifts, animated gradient
-  text, floating hero cards, count-up stats — all CSS/rAF, no extra deps,
-  with `prefers-reduced-motion` respected
+  - Free plan: 3 active deals (paid history doesn't count against it);
+    Pro ($9/mo): unlimited
+  - Stripe Checkout, Customer Portal, and a webhook that syncs plan state
+    to Firestore in real time
+- **Animations**: entrance/stagger animations, hover lifts, animated
+  gradient text, floating hero cards, count-up stats — all CSS/rAF,
+  `prefers-reduced-motion` respected
 - **Security**: API routes verify Firebase ID tokens; Firestore rules
-  restrict every user to their own data; billing fields are server-write-only
+  restrict every user to their own data; billing fields are
+  server-write-only
 
 ## Project structure
 
@@ -44,14 +55,14 @@ app/
   page.tsx                    # Animated landing page
   pricing/page.tsx            # Pricing + upgrade CTA
   login/ signup/              # Auth pages
-  dashboard/page.tsx          # The product: health score, presets, schedule
+  dashboard/page.tsx          # The product: pipeline + payment radar
   account/page.tsx            # Profile + billing portal
   api/checkout/route.ts       # Creates Stripe Checkout session
   api/portal/route.ts         # Creates Stripe Customer Portal session
   api/webhooks/stripe/route.ts# Syncs subscription state → Firestore
 components/                   # AuthProvider, Navbar, AuthForm, UpgradeButton, useCountUp
 lib/
-  maintenance.ts              # Categories, frequencies, presets, scheduling
+  deals.ts                    # Pipeline stages, payment terms, date math
   firebase/client.ts          # Browser SDK (baked public config + overrides)
   firebase/admin.ts           # Admin SDK + ID-token verification
   stripe.ts                   # Stripe server client
@@ -71,8 +82,8 @@ the app deploys with **zero env vars**. Two console steps are required:
 
 ### Enabling Stripe billing (later)
 
-1. Stripe dashboard → **Products** → add "Upkept Pro" with a recurring
-   $7/month price → copy the `price_...` ID.
+1. Stripe dashboard → **Products** → add "Paydar Pro" with a recurring
+   $9/month price → copy the `price_...` ID.
 2. **Developers → Webhooks** → add endpoint
    `https://your-domain.com/api/webhooks/stripe` with events
    `checkout.session.completed`, `customer.subscription.updated`,

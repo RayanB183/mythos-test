@@ -17,42 +17,45 @@ import { clientDb } from "@/lib/firebase/client";
 import { useAuth } from "@/components/AuthProvider";
 import UpgradeButton from "@/components/UpgradeButton";
 import { useCountUp } from "@/components/useCountUp";
-import { taskLimit } from "@/lib/plans";
+import { dealLimit } from "@/lib/plans";
 import {
-  CATEGORIES,
-  FREQUENCIES,
-  PRESETS,
-  nextDueFrom,
-  type Category,
-  type Frequency,
-} from "@/lib/maintenance";
+  STATUSES,
+  PAYMENT_TERMS,
+  addDays,
+  daysUntil,
+  todayIso,
+  type Status,
+} from "@/lib/deals";
 
-interface Task {
+interface Deal {
   id: string;
-  name: string;
-  category: Category;
-  frequency: Frequency;
-  nextDue: string; // ISO date (yyyy-mm-dd)
+  brand: string;
+  deliverable: string;
+  amount: number;
+  status: Status;
+  termsDays: number;
+  contentDue: string; // ISO date
+  invoicedAt: string | null; // ISO date, set when status reaches "invoiced"
 }
 
-const DAY_MS = 86_400_000;
-
-function daysUntil(isoDate: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((new Date(isoDate).getTime() - today.getTime()) / DAY_MS);
+function expectedPayDate(deal: Deal): string | null {
+  return deal.invoicedAt ? addDays(deal.invoicedAt, deal.termsDays) : null;
 }
 
-function StatCard({
+function isLate(deal: Deal): boolean {
+  if (deal.status !== "invoiced") return false;
+  const due = expectedPayDate(deal);
+  return due !== null && daysUntil(due) < 0;
+}
+
+function MoneyCard({
   label,
   value,
-  suffix = "",
   highlight = false,
   delayClass = "",
 }: {
   label: string;
   value: number;
-  suffix?: string;
   highlight?: boolean;
   delayClass?: string;
 }) {
@@ -60,7 +63,7 @@ function StatCard({
   return (
     <div
       className={`hover-lift animate-fade-in-up rounded-xl border bg-white p-5 ${delayClass} ${
-        highlight && value > 0 ? "border-amber-300 bg-amber-50" : "border-slate-200"
+        highlight && value > 0 ? "border-red-300 bg-red-50" : "border-slate-200"
       }`}
     >
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -68,24 +71,71 @@ function StatCard({
       </p>
       <p
         className={`mt-1 text-2xl font-extrabold tabular-nums ${
-          highlight && value > 0 ? "text-amber-600" : "text-slate-900"
+          highlight && value > 0 ? "text-red-600" : "text-slate-900"
         }`}
       >
-        {Math.round(animated)}
-        {suffix}
+        ${Math.round(animated).toLocaleString()}
       </p>
     </div>
   );
 }
 
+function paymentLine(deal: Deal): { text: string; tone: "red" | "amber" | "ok" | "muted" } {
+  if (deal.status === "paid") {
+    return { text: "Paid ✓", tone: "ok" };
+  }
+  if (deal.status === "invoiced") {
+    const due = expectedPayDate(deal)!;
+    const days = daysUntil(due);
+    if (days < 0) {
+      return {
+        text: `⚠ ${-days} day${days === -1 ? "" : "s"} late — follow up`,
+        tone: "red",
+      };
+    }
+    return {
+      text:
+        days === 0
+          ? "Payment due today"
+          : `Payment due in ${days} day${days === 1 ? "" : "s"} (net ${deal.termsDays})`,
+      tone: days <= 7 ? "amber" : "muted",
+    };
+  }
+  if (deal.status === "delivered") {
+    return { text: "Delivered — send your invoice", tone: "amber" };
+  }
+  const days = daysUntil(deal.contentDue);
+  if (days < 0) {
+    return {
+      text: `Content was due ${-days} day${days === -1 ? "" : "s"} ago`,
+      tone: "amber",
+    };
+  }
+  return {
+    text:
+      days === 0
+        ? "Content due today"
+        : `Content due in ${days} day${days === 1 ? "" : "s"}`,
+    tone: "muted",
+  };
+}
+
+const TONE_CLASS = {
+  red: "font-medium text-red-600",
+  amber: "font-medium text-amber-600",
+  ok: "font-medium text-emerald-600",
+  muted: "text-slate-500",
+} as const;
+
 export default function DashboardPage() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState<Category>("hvac");
-  const [frequency, setFrequency] = useState<Frequency>("quarterly");
-  const [nextDue, setNextDue] = useState("");
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [brand, setBrand] = useState("");
+  const [deliverable, setDeliverable] = useState("");
+  const [amount, setAmount] = useState("");
+  const [termsDays, setTermsDays] = useState(30);
+  const [contentDue, setContentDue] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,217 +145,204 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
     const q = query(
-      collection(clientDb(), "users", user.uid, "tasks"),
+      collection(clientDb(), "users", user.uid, "deals"),
       orderBy("createdAt", "desc")
     );
     return onSnapshot(q, (snapshot) => {
-      setTasks(
+      setDeals(
         snapshot.docs.map((d) => {
           const data = d.data();
           return {
             id: d.id,
-            name: data.name as string,
-            category: (data.category in CATEGORIES ? data.category : "exterior") as Category,
-            frequency: (data.frequency in FREQUENCIES
-              ? data.frequency
-              : "yearly") as Frequency,
-            nextDue: (data.nextDue as string) ?? "",
+            brand: data.brand as string,
+            deliverable: (data.deliverable as string) ?? "",
+            amount: Number(data.amount) || 0,
+            status: (data.status in STATUSES ? data.status : "pitched") as Status,
+            termsDays: Number(data.termsDays) || 30,
+            contentDue: (data.contentDue as string) ?? "",
+            invoicedAt: (data.invoicedAt as string) ?? null,
           };
         })
       );
     });
   }, [user]);
 
-  const sorted = useMemo(
-    () =>
-      [...tasks].sort(
-        (a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime()
-      ),
-    [tasks]
-  );
+  // Late payments first, then soonest deadline; paid deals sink to the bottom.
+  const sorted = useMemo(() => {
+    const rank = (d: Deal) =>
+      d.status === "paid" ? 2 : isLate(d) ? 0 : 1;
+    return [...deals].sort((a, b) => {
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      const aDate = expectedPayDate(a) ?? a.contentDue;
+      const bDate = expectedPayDate(b) ?? b.contentDue;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
+  }, [deals]);
 
-  const overdue = useMemo(
-    () => tasks.filter((t) => daysUntil(t.nextDue) < 0).length,
-    [tasks]
-  );
-  const dueSoon = useMemo(
+  const pipeline = useMemo(
     () =>
-      tasks.filter((t) => {
-        const d = daysUntil(t.nextDue);
-        return d >= 0 && d <= 30;
-      }).length,
-    [tasks]
+      deals
+        .filter((d) => d.status !== "paid")
+        .reduce((sum, d) => sum + d.amount, 0),
+    [deals]
   );
-  const healthScore = tasks.length
-    ? Math.round(((tasks.length - overdue) / tasks.length) * 100)
-    : 100;
+  const awaiting = useMemo(
+    () =>
+      deals
+        .filter((d) => d.status === "invoiced")
+        .reduce((sum, d) => sum + d.amount, 0),
+    [deals]
+  );
+  const overdue = useMemo(
+    () => deals.filter(isLate).reduce((sum, d) => sum + d.amount, 0),
+    [deals]
+  );
 
   if (loading || !user) {
     return <p className="py-24 text-center text-slate-500">Loading…</p>;
   }
 
   const plan = profile?.plan ?? "free";
-  const limit = taskLimit(plan);
-  const atLimit = tasks.length >= limit;
-  const existingNames = new Set(tasks.map((t) => t.name));
-  const availablePresets = PRESETS.filter((p) => !existingNames.has(p.name));
+  const limit = dealLimit(plan);
+  const activeCount = deals.filter((d) => d.status !== "paid").length;
+  const atLimit = activeCount >= limit;
 
-  async function addTask(
-    taskName: string,
-    taskCategory: Category,
-    taskFrequency: Frequency,
-    due: string
-  ) {
-    if (!user || atLimit || !taskName.trim() || !due) return;
-    await addDoc(collection(clientDb(), "users", user.uid, "tasks"), {
-      name: taskName.trim(),
-      category: taskCategory,
-      frequency: taskFrequency,
-      nextDue: due,
+  async function addDeal(e: FormEvent) {
+    e.preventDefault();
+    const parsedAmount = parseFloat(amount);
+    if (!user || atLimit || !brand.trim() || !(parsedAmount > 0) || !contentDue) {
+      return;
+    }
+    await addDoc(collection(clientDb(), "users", user.uid, "deals"), {
+      brand: brand.trim(),
+      deliverable: deliverable.trim(),
+      amount: parsedAmount,
+      status: "pitched",
+      termsDays,
+      contentDue,
+      invoicedAt: null,
       createdAt: serverTimestamp(),
     });
+    setBrand("");
+    setDeliverable("");
+    setAmount("");
+    setContentDue("");
   }
 
-  async function handleAddCustom(e: FormEvent) {
-    e.preventDefault();
-    await addTask(name, category, frequency, nextDue);
-    setName("");
-    setNextDue("");
-  }
-
-  async function addPreset(preset: (typeof PRESETS)[number]) {
-    await addTask(
-      preset.name,
-      preset.category,
-      preset.frequency,
-      nextDueFrom(new Date(), preset.frequency)
-    );
-  }
-
-  async function markDone(task: Task) {
+  async function advance(deal: Deal) {
     if (!user) return;
-    await updateDoc(doc(clientDb(), "users", user.uid, "tasks", task.id), {
-      nextDue: nextDueFrom(new Date(), task.frequency),
-      lastDone: new Date().toISOString().slice(0, 10),
+    const next = STATUSES[deal.status].next;
+    if (!next) return;
+    await updateDoc(doc(clientDb(), "users", user.uid, "deals", deal.id), {
+      status: next,
+      ...(next === "invoiced" && !deal.invoicedAt
+        ? { invoicedAt: todayIso() }
+        : {}),
+      ...(next === "paid" ? { paidAt: todayIso() } : {}),
     });
   }
 
-  async function removeTask(id: string) {
+  async function removeDeal(id: string) {
     if (!user) return;
     setRemovingId(id);
     // Let the exit transition play before the snapshot removes the row.
     await new Promise((r) => setTimeout(r, 250));
-    await deleteDoc(doc(clientDb(), "users", user.uid, "tasks", id));
+    await deleteDoc(doc(clientDb(), "users", user.uid, "deals", id));
     setRemovingId(null);
   }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
       <div className="animate-fade-in-up flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Your home</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Your deals</h1>
         <span className="text-sm text-slate-500">
-          {tasks.length}
-          {Number.isFinite(limit) ? ` / ${limit}` : ""} tasks
+          {activeCount}
+          {Number.isFinite(limit) ? ` / ${limit}` : ""} active
         </span>
       </div>
 
-      {/* Health summary */}
+      {/* Money summary */}
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Home health" value={healthScore} suffix="%" />
-        <StatCard
+        <MoneyCard label="In your pipeline" value={pipeline} />
+        <MoneyCard
+          label="Awaiting payment"
+          value={awaiting}
+          delayClass="animation-delay-100"
+        />
+        <MoneyCard
           label="Overdue"
           value={overdue}
           highlight
-          delayClass="animation-delay-100"
-        />
-        <StatCard
-          label="Due in 30 days"
-          value={dueSoon}
           delayClass="animation-delay-200"
         />
       </div>
 
-      {/* One-click presets */}
-      {availablePresets.length > 0 && !atLimit && (
-        <div className="animate-fade-in-up animation-delay-200 mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Quick add — tasks most homes need
-          </h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {availablePresets.slice(0, 8).map((p) => (
-              <button
-                key={p.name}
-                onClick={() => addPreset(p)}
-                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 transition-all hover:border-indigo-400 hover:bg-indigo-50 active:scale-95"
-              >
-                {CATEGORIES[p.category].emoji} {p.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Custom task form */}
+      {/* Add deal form */}
       <form
-        onSubmit={handleAddCustom}
-        className="animate-fade-in-up animation-delay-300 mt-6 grid gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_8rem_9rem_10rem_auto]"
+        onSubmit={addDeal}
+        className="animate-fade-in-up animation-delay-200 mt-8 grid gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2"
       >
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={atLimit ? "Plan limit reached" : "Custom task…"}
+          value={brand}
+          onChange={(e) => setBrand(e.target.value)}
+          placeholder={atLimit ? "Active deal limit reached" : "Brand name"}
+          disabled={atLimit}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
+        />
+        <input
+          value={deliverable}
+          onChange={(e) => setDeliverable(e.target.value)}
+          placeholder="Deliverable (e.g. 1 Reel + 3 Stories)"
+          disabled={atLimit}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
+        />
+        <input
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          type="number"
+          step="0.01"
+          min="0.01"
+          placeholder="Deal value ($)"
           disabled={atLimit}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
         />
         <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value as Category)}
+          value={termsDays}
+          onChange={(e) => setTermsDays(Number(e.target.value))}
           disabled={atLimit}
           className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
         >
-          {Object.entries(CATEGORIES).map(([key, c]) => (
-            <option key={key} value={key}>
-              {c.emoji} {c.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={frequency}
-          onChange={(e) => setFrequency(e.target.value as Frequency)}
-          disabled={atLimit}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
-        >
-          {Object.entries(FREQUENCIES).map(([key, f]) => (
-            <option key={key} value={key}>
-              {f.label}
+          {PAYMENT_TERMS.map((t) => (
+            <option key={t} value={t}>
+              Payment terms: net {t}
             </option>
           ))}
         </select>
         <input
-          value={nextDue}
-          onChange={(e) => setNextDue(e.target.value)}
+          value={contentDue}
+          onChange={(e) => setContentDue(e.target.value)}
           type="date"
           disabled={atLimit}
-          aria-label="Next due date"
+          aria-label="Content due date"
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
         />
         <button
           type="submit"
-          disabled={atLimit || !name.trim() || !nextDue}
+          disabled={atLimit || !brand.trim() || !amount || !contentDue}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-indigo-700 active:scale-95 disabled:opacity-50"
         >
-          Add
+          Add deal
         </button>
       </form>
 
       {atLimit && plan === "free" && (
         <div className="animate-scale-in mt-6 rounded-xl border border-indigo-200 bg-indigo-50 p-5">
           <p className="font-medium text-indigo-900">
-            You&apos;ve hit the free plan limit of {limit} tasks.
+            You&apos;ve hit the free plan limit of {limit} active deals.
           </p>
           <p className="mt-1 text-sm text-indigo-700">
-            A full home schedule has 20+. Upgrade to Pro — one avoided repair
-            pays for years of it.
+            Upgrade to Pro for unlimited deals — one rescued invoice covers
+            years of it.
           </p>
           <div className="mt-4 max-w-xs">
             <UpgradeButton />
@@ -313,71 +350,64 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Task list, soonest due first */}
+      {/* Deal list — late payments first */}
       <ul className="mt-8 space-y-2">
-        {sorted.map((task, i) => {
-          const days = daysUntil(task.nextDue);
-          const isOverdue = days < 0;
-          const soon = days >= 0 && days <= 14;
+        {sorted.map((deal, i) => {
+          const line = paymentLine(deal);
+          const status = STATUSES[deal.status];
           return (
             <li
-              key={task.id}
+              key={deal.id}
               style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
               className={`animate-fade-in-up flex items-center gap-4 rounded-xl border bg-white px-4 py-3 transition-all duration-300 ${
-                isOverdue
-                  ? "border-red-300"
-                  : soon
-                    ? "border-amber-300"
-                    : "border-slate-200"
+                line.tone === "red" ? "border-red-300" : "border-slate-200"
               } ${
-                removingId === task.id
+                removingId === deal.id
                   ? "translate-x-6 scale-95 opacity-0"
                   : "opacity-100"
               }`}
             >
-              <span className="text-xl" title={CATEGORIES[task.category].label}>
-                {CATEGORIES[task.category].emoji}
-              </span>
               <div className="flex-1">
-                <p className="font-semibold text-slate-800">{task.name}</p>
-                <p
-                  className={`text-xs ${
-                    isOverdue
-                      ? "font-medium text-red-600"
-                      : soon
-                        ? "font-medium text-amber-600"
-                        : "text-slate-500"
-                  }`}
-                >
-                  {isOverdue
-                    ? `⚠ Overdue by ${-days} day${days === -1 ? "" : "s"}`
-                    : days === 0
-                      ? "Due today"
-                      : `Due in ${days} day${days === 1 ? "" : "s"}`}{" "}
-                  · {FREQUENCIES[task.frequency].label.toLowerCase()}
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-slate-800">{deal.brand}</p>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.chip}`}
+                  >
+                    {status.label}
+                  </span>
+                </div>
+                <p className={`text-xs ${TONE_CLASS[line.tone]}`}>
+                  {line.text}
+                  {deal.deliverable && (
+                    <span className="text-slate-400"> · {deal.deliverable}</span>
+                  )}
                 </p>
               </div>
+              <p className="font-bold tabular-nums text-slate-900">
+                ${deal.amount.toLocaleString()}
+              </p>
+              {status.advanceLabel && (
+                <button
+                  onClick={() => advance(deal)}
+                  className="rounded-lg border border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-all hover:bg-indigo-50 active:scale-95"
+                >
+                  {status.advanceLabel} →
+                </button>
+              )}
               <button
-                onClick={() => markDone(task)}
-                className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-all hover:bg-emerald-50 active:scale-95"
-                title={`Reschedules ${FREQUENCIES[task.frequency].label.toLowerCase()}`}
-              >
-                ✓ Done
-              </button>
-              <button
-                onClick={() => removeTask(task.id)}
+                onClick={() => removeDeal(deal.id)}
                 className="text-sm text-slate-400 transition-colors hover:text-red-600"
-                aria-label={`Remove ${task.name}`}
+                aria-label={`Remove deal with ${deal.brand}`}
               >
                 ✕
               </button>
             </li>
           );
         })}
-        {tasks.length === 0 && (
+        {deals.length === 0 && (
           <li className="animate-fade-in rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-            No tasks yet. Start with the quick-add presets above — most homes
-            are overdue on at least three of them.
+            No deals yet. Add the one you&apos;re working on right now — even
+            a pitch counts.
           </li>
         )}
       </ul>

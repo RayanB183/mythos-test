@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { PLANS } from "@/lib/plans";
 
-const demoTasks = [
-  { name: "Replace HVAC filter", note: "Overdue by 12 days", warn: true },
-  { name: "Clean gutters", note: "Due in 9 days", warn: true },
-  { name: "Flush water heater", note: "Due in 3 months", warn: false },
+const demoDeals = [
+  { brand: "Glow Cosmetics", amount: "$1,500", note: "⚠ 12 days late", warn: true },
+  { brand: "TechBox", amount: "$850", note: "Payment due in 6 days", warn: false },
+  { brand: "FitFuel", amount: "$2,000", note: "Invoiced · net 60", warn: false },
 ];
 
 export default function HomePage() {
@@ -19,25 +19,25 @@ export default function HomePage() {
         <div className="relative grid items-center gap-12 lg:grid-cols-2">
           <div>
             <p className="animate-fade-in-up inline-block rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-              Deferred maintenance costs homeowners thousands every year
+              87% of creators have been paid late, paid wrong, or not paid at all
             </p>
             <h1 className="animate-fade-in-up animation-delay-100 mt-6 text-5xl font-extrabold leading-tight tracking-tight text-slate-900">
-              Your home is your biggest asset.{" "}
+              Know exactly what every brand owes you —{" "}
               <span className="text-gradient animate-gradient-pan">
-                Keep it that way.
+                and who&apos;s late
               </span>
             </h1>
             <p className="animate-fade-in-up animation-delay-200 mt-6 max-w-lg text-lg text-slate-600">
-              Upkept turns home maintenance into a simple schedule — HVAC
-              filters, gutters, water heater, the things everyone forgets —
-              with due-date countdowns and a health score for your whole home.
+              Paydar tracks your brand deals from pitch to paid. The moment you
+              invoice, it starts the clock on the payment terms — so net-60
+              never quietly becomes net-never.
             </p>
             <div className="animate-fade-in-up animation-delay-300 mt-10 flex items-center gap-4">
               <Link
                 href="/signup"
                 className="hover-lift animate-pulse-ring rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white hover:bg-indigo-700"
               >
-                Protect my home — free
+                Track my deals — free
               </Link>
               <Link
                 href="/pricing"
@@ -53,40 +53,47 @@ export default function HomePage() {
             <div className="animate-scale-in animation-delay-300 rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
               <div className="flex items-baseline justify-between">
                 <p className="text-sm font-medium text-slate-500">
-                  Home health
+                  Owed to you
                 </p>
-                <p className="text-3xl font-extrabold text-slate-900">86%</p>
+                <p className="text-3xl font-extrabold text-slate-900">$4,350</p>
               </div>
               <div className="mt-5 space-y-3">
-                {demoTasks.map((t, i) => (
+                {demoDeals.map((d, i) => (
                   <div
-                    key={t.name}
+                    key={d.brand}
                     className={`animate-fade-in-up flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 ${
                       i === 0 ? "animation-delay-400" : "animation-delay-500"
                     }`}
                   >
-                    <p className="text-sm font-semibold text-slate-800">
-                      {t.name}
-                    </p>
-                    <p
-                      className={`text-xs ${
-                        t.warn ? "font-medium text-amber-600" : "text-slate-500"
-                      }`}
-                    >
-                      {t.note}
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {d.brand}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          d.warn
+                            ? "font-medium text-red-600"
+                            : "text-slate-500"
+                        }`}
+                      >
+                        {d.note}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-slate-900">
+                      {d.amount}
                     </p>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="animate-float absolute -right-6 -top-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-lg">
-              <p className="text-xs font-semibold text-amber-800">
-                ⚠ Dryer vent uncleaned — #1 cause of house fires
+            <div className="animate-float absolute -right-6 -top-8 rounded-xl border border-red-200 bg-red-50 px-4 py-3 shadow-lg">
+              <p className="text-xs font-semibold text-red-700">
+                ⚠ Glow Cosmetics is 12 days late — follow up today
               </p>
             </div>
             <div className="animate-float-slow absolute -bottom-6 -left-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
               <p className="text-xs font-semibold text-emerald-800">
-                ✓ 14 tasks on schedule · ~$4,200 in repairs avoided
+                ✓ TravelNest paid $1,200 · on time
               </p>
             </div>
           </div>
@@ -97,9 +104,9 @@ export default function HomePage() {
       <section className="border-y border-slate-200 bg-white py-14">
         <div className="mx-auto grid max-w-5xl gap-8 px-4 text-center sm:grid-cols-3">
           {[
-            ["$1 → $4", "every dollar of prevention saves four in repairs"],
-            ["65%", "of homeowners put off routine maintenance"],
-            ["20+", "recurring tasks the average home actually needs"],
+            ["87%", "of creators have been paid late, wrong, or never"],
+            ["40%", "say chasing payments is one of the hardest parts of the job"],
+            ["net 90", "payment terms are becoming the industry norm"],
           ].map(([stat, label], i) => (
             <div
               key={label}
@@ -117,21 +124,21 @@ export default function HomePage() {
       {/* Features */}
       <section className="mx-auto max-w-6xl px-4 py-20">
         <h2 className="animate-fade-in-up text-center text-3xl font-bold text-slate-900">
-          A maintenance schedule that builds itself
+          Your deals, from pitch to paid
         </h2>
         <div className="mt-12 grid gap-6 sm:grid-cols-3">
           {[
             {
-              title: "One-click presets",
-              body: "HVAC filters, gutters, sump pump, dryer vent — add the tasks everyone forgets, each with the right schedule built in.",
+              title: "A pipeline built for deals",
+              body: "Pitched, negotiating, signed, delivered, invoiced, paid. One click moves a deal forward — no spreadsheet gymnastics.",
             },
             {
-              title: "A health score for your home",
-              body: "One number tells you instantly whether you're on top of things or quietly racking up repair bills.",
+              title: "Payment radar",
+              body: "Invoice a deal and Paydar starts counting down the payment terms. The day a brand goes late, you know — with the receipts.",
             },
             {
               title: `Pro for ${PLANS.pro.price}/mo`,
-              body: "Unlimited tasks for the whole house. One avoided service call pays for years of Pro.",
+              body: "Unlimited deals and your full earnings history. One rescued invoice pays for years of it.",
             },
           ].map((f, i) => (
             <div
@@ -150,7 +157,7 @@ export default function HomePage() {
             href="/signup"
             className="hover-lift inline-block rounded-lg bg-indigo-600 px-8 py-3 font-medium text-white hover:bg-indigo-700"
           >
-            Get your home health score
+            Find out who owes you money
           </Link>
         </div>
       </section>

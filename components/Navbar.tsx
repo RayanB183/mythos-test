@@ -19,7 +19,7 @@ export default function Navbar() {
     <header className="border-b border-slate-200 bg-white">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="text-lg font-bold text-slate-900">
-          Up<span className="text-indigo-600">kept</span>
+          Pay<span className="text-indigo-600">dar</span>
         </Link>
         <div className="flex items-center gap-4 text-sm">
           <Link href="/pricing" className="text-slate-600 hover:text-slate-900">

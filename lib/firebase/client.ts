@@ -13,6 +13,15 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+/**
+ * True once the required NEXT_PUBLIC_FIREBASE_* env vars are present.
+ * Lets the UI degrade to a setup notice instead of crashing when the
+ * app is deployed without configuration.
+ */
+export const firebaseConfigured = Boolean(
+  firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId
+);
+
 function app(): FirebaseApp {
   return getApps().length ? getApp() : initializeApp(firebaseConfig);
 }

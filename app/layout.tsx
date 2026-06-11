@@ -4,9 +4,9 @@ import Navbar from "@/components/Navbar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Upkept — Home maintenance on autopilot",
+  title: "Paydar — Know which brands owe you, and who's late",
   description:
-    "Track every maintenance task your home needs — HVAC filters, gutters, water heater — with due-date countdowns and a home health score. Free to start.",
+    "Track your brand deals from pitch to paid. Paydar counts down every invoice's payment terms and flags the moment a brand goes late. Free to start.",
 };
 
 export default function RootLayout({

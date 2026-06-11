@@ -11,21 +11,28 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { clientDb } from "@/lib/firebase/client";
 import { useAuth } from "@/components/AuthProvider";
 import UpgradeButton from "@/components/UpgradeButton";
 import { useCountUp } from "@/components/useCountUp";
-import { subscriptionLimit } from "@/lib/plans";
+import { taskLimit } from "@/lib/plans";
+import {
+  CATEGORIES,
+  FREQUENCIES,
+  PRESETS,
+  nextDueFrom,
+  type Category,
+  type Frequency,
+} from "@/lib/maintenance";
 
-type Cycle = "monthly" | "yearly";
-
-interface Subscription {
+interface Task {
   id: string;
   name: string;
-  cost: number;
-  cycle: Cycle;
-  nextRenewal: string; // ISO date (yyyy-mm-dd)
+  category: Category;
+  frequency: Frequency;
+  nextDue: string; // ISO date (yyyy-mm-dd)
 }
 
 const DAY_MS = 86_400_000;
@@ -36,27 +43,20 @@ function daysUntil(isoDate: string): number {
   return Math.round((new Date(isoDate).getTime() - today.getTime()) / DAY_MS);
 }
 
-function monthlyCost(sub: Subscription): number {
-  return sub.cycle === "monthly" ? sub.cost : sub.cost / 12;
-}
-
 function StatCard({
   label,
   value,
-  prefix = "",
+  suffix = "",
   highlight = false,
   delayClass = "",
 }: {
   label: string;
   value: number;
-  prefix?: string;
+  suffix?: string;
   highlight?: boolean;
   delayClass?: string;
 }) {
   const animated = useCountUp(value);
-  const display = prefix
-    ? `${prefix}${animated.toFixed(2)}`
-    : `${Math.round(animated)}`;
   return (
     <div
       className={`hover-lift animate-fade-in-up rounded-xl border bg-white p-5 ${delayClass} ${
@@ -71,7 +71,8 @@ function StatCard({
           highlight && value > 0 ? "text-amber-600" : "text-slate-900"
         }`}
       >
-        {display}
+        {Math.round(animated)}
+        {suffix}
       </p>
     </div>
   );
@@ -80,11 +81,11 @@ function StatCard({
 export default function DashboardPage() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [name, setName] = useState("");
-  const [cost, setCost] = useState("");
-  const [cycle, setCycle] = useState<Cycle>("monthly");
-  const [nextRenewal, setNextRenewal] = useState("");
+  const [category, setCategory] = useState<Category>("hvac");
+  const [frequency, setFrequency] = useState<Frequency>("quarterly");
+  const [nextDue, setNextDue] = useState("");
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,19 +95,21 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
     const q = query(
-      collection(clientDb(), "users", user.uid, "subscriptions"),
+      collection(clientDb(), "users", user.uid, "tasks"),
       orderBy("createdAt", "desc")
     );
     return onSnapshot(q, (snapshot) => {
-      setSubs(
+      setTasks(
         snapshot.docs.map((d) => {
           const data = d.data();
           return {
             id: d.id,
             name: data.name as string,
-            cost: Number(data.cost) || 0,
-            cycle: data.cycle === "yearly" ? "yearly" : "monthly",
-            nextRenewal: (data.nextRenewal as string) ?? "",
+            category: (data.category in CATEGORIES ? data.category : "exterior") as Category,
+            frequency: (data.frequency in FREQUENCIES
+              ? data.frequency
+              : "yearly") as Frequency,
+            nextDue: (data.nextDue as string) ?? "",
           };
         })
       );
@@ -115,132 +118,180 @@ export default function DashboardPage() {
 
   const sorted = useMemo(
     () =>
-      [...subs].sort(
-        (a, b) =>
-          new Date(a.nextRenewal).getTime() - new Date(b.nextRenewal).getTime()
+      [...tasks].sort(
+        (a, b) => new Date(a.nextDue).getTime() - new Date(b.nextDue).getTime()
       ),
-    [subs]
+    [tasks]
   );
 
-  const totalMonthly = useMemo(
-    () => subs.reduce((sum, s) => sum + monthlyCost(s), 0),
-    [subs]
+  const overdue = useMemo(
+    () => tasks.filter((t) => daysUntil(t.nextDue) < 0).length,
+    [tasks]
   );
-  const renewingSoon = useMemo(
+  const dueSoon = useMemo(
     () =>
-      subs.filter((s) => {
-        const d = daysUntil(s.nextRenewal);
-        return d >= 0 && d <= 7;
+      tasks.filter((t) => {
+        const d = daysUntil(t.nextDue);
+        return d >= 0 && d <= 30;
       }).length,
-    [subs]
+    [tasks]
   );
+  const healthScore = tasks.length
+    ? Math.round(((tasks.length - overdue) / tasks.length) * 100)
+    : 100;
 
   if (loading || !user) {
     return <p className="py-24 text-center text-slate-500">Loading…</p>;
   }
 
   const plan = profile?.plan ?? "free";
-  const limit = subscriptionLimit(plan);
-  const atLimit = subs.length >= limit;
+  const limit = taskLimit(plan);
+  const atLimit = tasks.length >= limit;
+  const existingNames = new Set(tasks.map((t) => t.name));
+  const availablePresets = PRESETS.filter((p) => !existingNames.has(p.name));
 
-  async function addSubscription(e: FormEvent) {
-    e.preventDefault();
-    const parsedCost = parseFloat(cost);
-    if (!name.trim() || !nextRenewal || !(parsedCost > 0) || atLimit || !user) {
-      return;
-    }
-    await addDoc(collection(clientDb(), "users", user.uid, "subscriptions"), {
-      name: name.trim(),
-      cost: parsedCost,
-      cycle,
-      nextRenewal,
+  async function addTask(
+    taskName: string,
+    taskCategory: Category,
+    taskFrequency: Frequency,
+    due: string
+  ) {
+    if (!user || atLimit || !taskName.trim() || !due) return;
+    await addDoc(collection(clientDb(), "users", user.uid, "tasks"), {
+      name: taskName.trim(),
+      category: taskCategory,
+      frequency: taskFrequency,
+      nextDue: due,
       createdAt: serverTimestamp(),
     });
-    setName("");
-    setCost("");
-    setNextRenewal("");
   }
 
-  async function removeSubscription(id: string) {
+  async function handleAddCustom(e: FormEvent) {
+    e.preventDefault();
+    await addTask(name, category, frequency, nextDue);
+    setName("");
+    setNextDue("");
+  }
+
+  async function addPreset(preset: (typeof PRESETS)[number]) {
+    await addTask(
+      preset.name,
+      preset.category,
+      preset.frequency,
+      nextDueFrom(new Date(), preset.frequency)
+    );
+  }
+
+  async function markDone(task: Task) {
+    if (!user) return;
+    await updateDoc(doc(clientDb(), "users", user.uid, "tasks", task.id), {
+      nextDue: nextDueFrom(new Date(), task.frequency),
+      lastDone: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  async function removeTask(id: string) {
     if (!user) return;
     setRemovingId(id);
     // Let the exit transition play before the snapshot removes the row.
     await new Promise((r) => setTimeout(r, 250));
-    await deleteDoc(doc(clientDb(), "users", user.uid, "subscriptions", id));
+    await deleteDoc(doc(clientDb(), "users", user.uid, "tasks", id));
     setRemovingId(null);
   }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
       <div className="animate-fade-in-up flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">
-          Your subscriptions
-        </h1>
+        <h1 className="text-2xl font-bold text-slate-900">Your home</h1>
         <span className="text-sm text-slate-500">
-          {subs.length}
-          {Number.isFinite(limit) ? ` / ${limit}` : ""} tracked
+          {tasks.length}
+          {Number.isFinite(limit) ? ` / ${limit}` : ""} tasks
         </span>
       </div>
 
-      {/* Spend summary */}
+      {/* Health summary */}
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Monthly spend" value={totalMonthly} prefix="$" />
+        <StatCard label="Home health" value={healthScore} suffix="%" />
         <StatCard
-          label="Yearly spend"
-          value={totalMonthly * 12}
-          prefix="$"
+          label="Overdue"
+          value={overdue}
+          highlight
           delayClass="animation-delay-100"
         />
         <StatCard
-          label="Renewing in 7 days"
-          value={renewingSoon}
-          highlight
+          label="Due in 30 days"
+          value={dueSoon}
           delayClass="animation-delay-200"
         />
       </div>
 
-      {/* Add form */}
+      {/* One-click presets */}
+      {availablePresets.length > 0 && !atLimit && (
+        <div className="animate-fade-in-up animation-delay-200 mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Quick add — tasks most homes need
+          </h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {availablePresets.slice(0, 8).map((p) => (
+              <button
+                key={p.name}
+                onClick={() => addPreset(p)}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 transition-all hover:border-indigo-400 hover:bg-indigo-50 active:scale-95"
+              >
+                {CATEGORIES[p.category].emoji} {p.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Custom task form */}
       <form
-        onSubmit={addSubscription}
-        className="animate-fade-in-up animation-delay-200 mt-8 grid gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_7rem_7.5rem_10rem_auto]"
+        onSubmit={handleAddCustom}
+        className="animate-fade-in-up animation-delay-300 mt-6 grid gap-2 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_8rem_9rem_10rem_auto]"
       >
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder={atLimit ? "Plan limit reached" : "Netflix, Spotify…"}
-          disabled={atLimit}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
-        />
-        <input
-          value={cost}
-          onChange={(e) => setCost(e.target.value)}
-          type="number"
-          step="0.01"
-          min="0.01"
-          placeholder="Cost ($)"
+          placeholder={atLimit ? "Plan limit reached" : "Custom task…"}
           disabled={atLimit}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
         />
         <select
-          value={cycle}
-          onChange={(e) => setCycle(e.target.value as Cycle)}
+          value={category}
+          onChange={(e) => setCategory(e.target.value as Category)}
           disabled={atLimit}
           className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
         >
-          <option value="monthly">per month</option>
-          <option value="yearly">per year</option>
+          {Object.entries(CATEGORIES).map(([key, c]) => (
+            <option key={key} value={key}>
+              {c.emoji} {c.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={frequency}
+          onChange={(e) => setFrequency(e.target.value as Frequency)}
+          disabled={atLimit}
+          className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
+        >
+          {Object.entries(FREQUENCIES).map(([key, f]) => (
+            <option key={key} value={key}>
+              {f.label}
+            </option>
+          ))}
         </select>
         <input
-          value={nextRenewal}
-          onChange={(e) => setNextRenewal(e.target.value)}
+          value={nextDue}
+          onChange={(e) => setNextDue(e.target.value)}
           type="date"
           disabled={atLimit}
-          aria-label="Next renewal date"
+          aria-label="Next due date"
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm transition-colors focus:border-indigo-500 focus:outline-none disabled:bg-slate-100"
         />
         <button
           type="submit"
-          disabled={atLimit || !name.trim() || !cost || !nextRenewal}
+          disabled={atLimit || !name.trim() || !nextDue}
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-indigo-700 active:scale-95 disabled:opacity-50"
         >
           Add
@@ -250,11 +301,11 @@ export default function DashboardPage() {
       {atLimit && plan === "free" && (
         <div className="animate-scale-in mt-6 rounded-xl border border-indigo-200 bg-indigo-50 p-5">
           <p className="font-medium text-indigo-900">
-            You&apos;ve hit the free plan limit of {limit} subscriptions.
+            You&apos;ve hit the free plan limit of {limit} tasks.
           </p>
           <p className="mt-1 text-sm text-indigo-700">
-            Most people have 12+. Upgrade to Pro to track them all — it pays
-            for itself the first renewal you catch.
+            A full home schedule has 20+. Upgrade to Pro — one avoided repair
+            pays for years of it.
           </p>
           <div className="mt-4 max-w-xs">
             <UpgradeButton />
@@ -262,67 +313,71 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Subscription list, soonest renewal first */}
+      {/* Task list, soonest due first */}
       <ul className="mt-8 space-y-2">
-        {sorted.map((sub, i) => {
-          const days = daysUntil(sub.nextRenewal);
-          const soon = days >= 0 && days <= 7;
-          const overdue = days < 0;
+        {sorted.map((task, i) => {
+          const days = daysUntil(task.nextDue);
+          const isOverdue = days < 0;
+          const soon = days >= 0 && days <= 14;
           return (
             <li
-              key={sub.id}
+              key={task.id}
               style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
               className={`animate-fade-in-up flex items-center gap-4 rounded-xl border bg-white px-4 py-3 transition-all duration-300 ${
-                soon ? "border-amber-300" : "border-slate-200"
+                isOverdue
+                  ? "border-red-300"
+                  : soon
+                    ? "border-amber-300"
+                    : "border-slate-200"
               } ${
-                removingId === sub.id
+                removingId === task.id
                   ? "translate-x-6 scale-95 opacity-0"
                   : "opacity-100"
               }`}
             >
+              <span className="text-xl" title={CATEGORIES[task.category].label}>
+                {CATEGORIES[task.category].emoji}
+              </span>
               <div className="flex-1">
-                <p className="font-semibold text-slate-800">{sub.name}</p>
+                <p className="font-semibold text-slate-800">{task.name}</p>
                 <p
                   className={`text-xs ${
-                    overdue
-                      ? "text-red-600"
+                    isOverdue
+                      ? "font-medium text-red-600"
                       : soon
                         ? "font-medium text-amber-600"
                         : "text-slate-500"
                   }`}
                 >
-                  {overdue
-                    ? "Renewal date passed — update or cancel it"
+                  {isOverdue
+                    ? `⚠ Overdue by ${-days} day${days === -1 ? "" : "s"}`
                     : days === 0
-                      ? "⚠ Renews today"
-                      : days === 1
-                        ? "⚠ Renews tomorrow"
-                        : `Renews in ${days} days`}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-bold tabular-nums text-slate-900">
-                  ${sub.cost.toFixed(2)}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {sub.cycle === "monthly" ? "/month" : "/year"}
+                      ? "Due today"
+                      : `Due in ${days} day${days === 1 ? "" : "s"}`}{" "}
+                  · {FREQUENCIES[task.frequency].label.toLowerCase()}
                 </p>
               </div>
               <button
-                onClick={() => removeSubscription(sub.id)}
+                onClick={() => markDone(task)}
+                className="rounded-lg border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-all hover:bg-emerald-50 active:scale-95"
+                title={`Reschedules ${FREQUENCIES[task.frequency].label.toLowerCase()}`}
+              >
+                ✓ Done
+              </button>
+              <button
+                onClick={() => removeTask(task.id)}
                 className="text-sm text-slate-400 transition-colors hover:text-red-600"
-                aria-label={`Remove ${sub.name}`}
-                title="Cancelled it? Remove from tracking"
+                aria-label={`Remove ${task.name}`}
               >
                 ✕
               </button>
             </li>
           );
         })}
-        {subs.length === 0 && (
+        {tasks.length === 0 && (
           <li className="animate-fade-in rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-            No subscriptions tracked yet. Add your first one above — check
-            your bank statement for recurring charges you forgot about.
+            No tasks yet. Start with the quick-add presets above — most homes
+            are overdue on at least three of them.
           </li>
         )}
       </ul>

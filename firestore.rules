@@ -10,8 +10,8 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
 
-      // Each user's tracked subscriptions live under their own doc.
-      match /subscriptions/{subscriptionId} {
+      // Each user's maintenance tasks live under their own doc.
+      match /tasks/{taskId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }

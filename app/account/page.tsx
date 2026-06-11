@@ -47,12 +47,12 @@ export default function AccountPage() {
     <div className="mx-auto max-w-2xl px-4 py-12">
       <h1 className="text-2xl font-bold text-slate-900">Account</h1>
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="animate-fade-in-up mt-6 rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="font-semibold text-slate-900">Profile</h2>
         <p className="mt-2 text-sm text-slate-600">{user.email}</p>
       </div>
 
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="animate-fade-in-up animation-delay-100 mt-4 rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="font-semibold text-slate-900">Subscription</h2>
         <p className="mt-2 text-sm text-slate-600">
           Current plan:{" "}

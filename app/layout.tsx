@@ -4,9 +4,9 @@ import Navbar from "@/components/Navbar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TaskFlow — Simple task management for teams",
+  title: "Renewly — Stop paying for subscriptions you forgot about",
   description:
-    "Organize your work with TaskFlow. Free to start, upgrade to Pro for unlimited tasks.",
+    "Track every recurring charge in one place, see your true monthly spend, and get renewal countdowns before you're billed. Free to start.",
 };
 
 export default function RootLayout({

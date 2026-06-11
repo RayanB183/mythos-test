@@ -1,18 +1,28 @@
-# TaskFlow — SaaS starter with Stripe + Firebase
+# Renewly — subscription-spend tracker (SaaS starter with Stripe + Firebase)
 
-A monetizable SaaS task-management app built with **Next.js (App Router)**,
-**Firebase** (Auth + Firestore), and **Stripe** (subscriptions).
+**The problem:** the average household holds 12+ subscriptions and wastes
+~$133/month on services they forgot they were paying for. Renewly puts every
+recurring charge in one dashboard, shows your true monthly/yearly spend, and
+counts down to each renewal so you can cancel *before* you're billed.
+
+Built with **Next.js (App Router)**, **Firebase** (Auth + Firestore), and
+**Stripe** (subscriptions).
 
 ## What's included
 
-- **Landing page** and **pricing page** with Free / Pro tiers
+- **Animated landing page** and **pricing page** with Free / Pro tiers
 - **Auth**: email + password and Google sign-in via Firebase Auth
-- **Database**: real-time task list per user in Firestore
+- **Database**: real-time subscription list per user in Firestore
+- **The product**: monthly/yearly spend totals with count-up animations,
+  renewal countdowns, and warnings for anything renewing within 7 days
 - **Monetization**:
-  - Free plan capped at 10 tasks; Pro ($9/mo) is unlimited
+  - Free plan capped at 5 tracked subscriptions; Pro ($5/mo) is unlimited
   - Stripe Checkout for subscribing
   - Stripe Customer Portal for managing/cancelling
   - Stripe webhook keeps each user's plan in sync in Firestore
+- **Animations**: entrance/stagger animations, hover lifts, animated gradient
+  text, floating hero cards, count-up stats — all CSS/rAF, no extra deps,
+  with `prefers-reduced-motion` respected
 - **Security**: API routes verify Firebase ID tokens; Firestore rules
   restrict every user to their own data; billing fields are server-write-only
 
@@ -20,15 +30,15 @@ A monetizable SaaS task-management app built with **Next.js (App Router)**,
 
 ```
 app/
-  page.tsx                    # Landing page
+  page.tsx                    # Animated landing page
   pricing/page.tsx            # Pricing + upgrade CTA
   login/ signup/              # Auth pages
-  dashboard/page.tsx          # The product: real-time tasks w/ plan gating
+  dashboard/page.tsx          # The product: spend stats + renewal tracking
   account/page.tsx            # Profile + billing portal
   api/checkout/route.ts       # Creates Stripe Checkout session
   api/portal/route.ts         # Creates Stripe Customer Portal session
   api/webhooks/stripe/route.ts# Syncs subscription state → Firestore
-components/                   # AuthProvider, Navbar, AuthForm, UpgradeButton
+components/                   # AuthProvider, Navbar, AuthForm, UpgradeButton, useCountUp
 lib/
   firebase/client.ts          # Browser SDK (Auth + Firestore)
   firebase/admin.ts           # Admin SDK + ID-token verification
@@ -55,7 +65,7 @@ firestore.rules               # Firestore security rules
 ### 2. Stripe
 
 1. Create an account at [dashboard.stripe.com](https://dashboard.stripe.com) (test mode is fine).
-2. **Products** → Add product "TaskFlow Pro" with a **recurring** $9/month
+2. **Products** → Add product "Renewly Pro" with a **recurring** $5/month
    price → copy the `price_...` ID into `STRIPE_PRO_PRICE_ID`.
 3. **Developers → API keys** → copy the secret key into `STRIPE_SECRET_KEY`.
 4. **Developers → Webhooks** → Add endpoint:
@@ -80,8 +90,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, sign up, add tasks, and hit **Upgrade to Pro**
-— use Stripe's test card `4242 4242 4242 4242` (any future expiry, any CVC).
+Open http://localhost:3000, sign up, add a few subscriptions, and hit
+**Upgrade to Pro** — use Stripe's test card `4242 4242 4242 4242`
+(any future expiry, any CVC).
 
 ## How billing sync works
 

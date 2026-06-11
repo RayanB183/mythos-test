@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User profile docs. Billing fields (plan, subscriptionStatus, etc.)
+    // are written exclusively by the server via the Admin SDK, which
+    // bypasses these rules — so clients get read-only access.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+
+      // Each user's tasks live under their own doc.
+      match /tasks/{taskId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+}
